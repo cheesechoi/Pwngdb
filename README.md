@@ -32,6 +32,9 @@ If you want to use the feature of heapinfo and tracemalloc , you need to install
 	+ You need to stop on printf which has vulnerability.
 + `force` : Calculate the nb in the house of force.
 + `heapinfo` : Print some infomation of heap
+	+ heapinfo (Address of arena)
+	+ default is the arena of current thread
++ `heapinfoall` : Print some infomation of heap (all threads)
 + `chunkinfo`: Print the infomation of chunk
     + chunkinfo (Address of victim)
 + `chunkptr` : Print the infomation of chunk 
@@ -44,6 +47,13 @@ If you want to use the feature of heapinfo and tracemalloc , you need to install
 	+ You can set the `DEBUG` in pwngdb.py , than it will print all of the malloc and free infomation such as the screeshot.
 + `parseheap` : Parse heap layout
 + `magic` : Print useful variable and function in glibc
++ `fp` : show FILE structure
+	+ fp (Address of FILE)
++ `fpchain`: show linked list of FILE
++ `orange` : Test `house of orange` condition in the `_IO_flush_lockp`
+	+ orange (Address of FILE)
+	+ glibc version <= 2.23
+
 
 ## Screenshot
 
@@ -56,6 +66,9 @@ If you want to use the feature of heapinfo and tracemalloc , you need to install
 + Heapinfo
 
 ![heapinfo](http://i.imgur.com/xhTc8Gv.png)
++ Heapinfoall
+
+![heapinfoall](http://i.imgur.com/DYjc3SB.png)
 
 + parseheap
 

@@ -22,14 +22,24 @@ class AngelHeapCmd(object):
         else :
             angelheap.dis_trace_malloc()
 
-    def heapinfo(self):
+    def heapinfo(self,*arg):
         """ Print some information of heap """
-        angelheap.putheapinfo()
+        (arena,) = normalize_argv(arg,1)
+        angelheap.putheapinfo(arena)
+
+    def heapinfoall(self):
+        """ Print some information of multiheap """
+        angelheap.putheapinfoall()
 
     def chunkinfo(self,*arg):
         """ Print chunk information of victim"""
         (victim,) = normalize_argv(arg,1)
         angelheap.chunkinfo(victim)
+
+    def free(self,*arg):
+        """ Print chunk is freeable """
+        (victim,) = normalize_argv(arg,1)
+        angelheap.freeptr(victim)
 
     def chunkptr(self,*arg):
         """ Print chunk information of user ptr"""
@@ -56,11 +66,7 @@ class AngelHeapCmd(object):
 
     def parseheap(self):
         """ Parse heap """
-        heapbase = int(gdb.execute("heap",to_string=True).split("\x1b[37m")[1].strip(),16)
-        if heapbase :
-            angelheap.parse_heap(heapbase)
-        else :
-            print("heap not found")
+        angelheap.parse_heap()
 
     def fakefast(self,*arg):
         (addr,size) = normalize_argv(arg,2)

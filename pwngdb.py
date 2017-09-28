@@ -1,3 +1,4 @@
+from __future__ import print_function
 import gdb
 import subprocess
 import re
@@ -99,6 +100,28 @@ class PwnCmd(object):
                 print("\033[34m" + hex(sym)  + ":" + "\033[37m" +hex(symaddr))
             else :
                 print("\033[34m" + sym  + ":" + "\033[37m" +hex(symaddr))
+    
+    def fp(self,*arg):
+        """ show FILE structure """
+        (addr,) = normalize_argv(arg,1)
+        showfp(addr)
+
+    def fpchain(self):
+        """ show FILE chain """
+        showfpchain()
+
+    def orange(self,*arg):
+        """ test house of orange """
+        (addr,) = normalize_argv(arg,1)
+        if addr :
+            testorange(addr)
+        else :
+            print("You need to specifiy an address")
+
+    def fsop(self,*arg):
+        """ test fsop """
+        (addr,) = normalize_argv(arg,1)
+        testfsop(addr) 
 
     def magic(self):
         """ Print usefual variables or function in glibc """
@@ -111,7 +134,7 @@ class PwnCmd(object):
             print("\033[37m========== variables ==========")
             for v in magic_variable :
                 cmd = "x/" + word + "&" +v
-                content = gdb.execute(cmd,to_string=True).split(":")[1].strip()
+                content = gdb.execute(cmd,to_string=true).split(":")[1].strip()
                 offset = hex(getoff("&"+ v))
                 pad = 36 - len(v) - len(offset) - 2
                 print("\033[34m%s\033[33m(%s)\033[37m%s: \033[37m%s" % (v, offset, ' ' *pad, content))
@@ -141,7 +164,7 @@ class PwnCmd(object):
             cmd = "objdump -R "
             if iscplus :
                 cmd += "--demangle "
-            cmd += processname
+            cmd += "\"" + processname + "\""
             got = subprocess.check_output(cmd,shell=True)[:-2].decode('utf8')
             print(got)
         else :
@@ -151,7 +174,7 @@ class PwnCmd(object):
         """ Print dynamic section """
         processname = getprocname()
         if processname :
-            dyn = subprocess.check_output("readelf -d " + processname,shell=True).decode('utf8')
+            dyn = subprocess.check_output("readelf -d \"" + processname + "\"",shell=True).decode('utf8')
             print(dyn)
         else :
             print("No current process or executable file specified." )
@@ -160,7 +183,7 @@ class PwnCmd(object):
         """ ROPgadget """
         procname = getprocname()
         if procname :
-            subprocess.call("ROPgadget --binary " + procname,shell=True)
+            subprocess.call("ROPgadget --binary \"" + procname +"\"",shell=True)
         else :
             print("No current process or executable file specified." )
 
@@ -403,7 +426,7 @@ def searchcall(sym):
     cmd = "objdump -d -M intel "
     if iscplus :
         cmd += "--demangle "
-    cmd += procname
+    cmd += "\"" + procname + "\""
     try :
         call = subprocess.check_output(cmd
                 + "| grep \"call.*" + sym + "@plt>\""  ,shell=True).decode('utf8')
@@ -413,7 +436,7 @@ def searchcall(sym):
 
 def ispie():
     procname = getprocname()
-    result = subprocess.check_output("readelf -h " + procname,shell=True).decode('utf8')
+    result = subprocess.check_output("readelf -h " + "\"" + procname +"\"",shell=True).decode('utf8')
     if re.search("DYN",result):
         return True
     else:
@@ -424,6 +447,87 @@ def get_reg(reg):
     result = int(gdb.execute(cmd,to_string=True).split()[1].strip(),16)
     return result
 
+def showfp(addr):
+    if addr : 
+        cmd = "p *(struct _IO_FILE_plus *)" + hex(addr)
+        try :
+            result = gdb.execute(cmd)
+        except :
+            print("Can't not access 0x%x" % addr)
+    else :
+        print("You need to specify an address")
+
+def showfpchain():
+    getarch()
+    cmd = "x/" + word + "&_IO_list_all"
+    head = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16)
+    print("\033[32mfpchain:\033[1;37m ",end = "")
+    chain = head
+    print("0x%x" % chain,end = "")
+    try :
+        while chain != 0 :
+            print(" --> ",end = "")
+            cmd = "x/" + word + "&((struct _IO_FILE_plus *)" + hex(chain) +").file._chain"
+            chain = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16)
+            print("0x%x" % chain,end = "")
+        print("")
+    except :
+        print("Chain is corrupted")
+
+def testorange(addr):
+    getarch()
+    result = True
+    cmd = "x/" + word + "&((struct _IO_FILE_plus *)" + hex(addr) + ").file._mode"
+    mode = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16) & 0xffffffff
+    cmd = "x/" + word + "&((struct _IO_FILE_plus *)" + hex(addr) + ").file._IO_write_ptr"
+    write_ptr = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16)
+    cmd = "x/" + word + "&((struct _IO_FILE_plus *)" + hex(addr) + ").file._IO_write_base"
+    write_base = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16)
+    if mode < 0x80000000 and mode != 0:
+        try :
+            cmd = "x/" + word + "&((struct _IO_FILE_plus *)" + hex(addr) + ").file._wide_data"
+            wide_data = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16)
+            cmd = "x/" + word + "&((struct _IO_wide_data *)" + hex(wide_data) + ")._IO_write_ptr"
+            w_write_ptr = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16)
+            cmd = "x/" + word + "&((struct _IO_wide_data *)" + hex(wide_data) + ")._IO_write_base"
+            w_write_base = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16)
+            if w_write_ptr <= w_write_base :
+                print("\033[;1;31m_wide_data->_IO_write_ptr(0x%x) < _wide_data->_IO_write_base(0x%x)\033[1;37m" % (w_write_ptr,w_write_base))
+                result = False
+        except :
+            print("\033;1;31mCan't access wide_data\033[1;37m")
+            result = False
+    else :
+        if write_ptr <= write_base :
+            print("\033[;1;31m_IO_write_ptr(0x%x) < _IO_write_base(0x%x)\033[1;37m" % (write_ptr,write_base))
+            result = False  
+    if result :
+        print("Result : \033[34mTrue\033[37m")
+        cmd = "x/" + word + "&((struct _IO_FILE_plus *)" + hex(addr) + ").vtable.__overflow"
+        overflow = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16)
+        print("Func : \033[33m 0x%x\033[1;37m" % overflow)
+    else :
+        print("Result : \033[31mFalse\033[1;37m")
+
+def testfsop(addr=None):
+    getarch()
+    if addr :
+        cmd = "x/" + word + hex(addr)
+    else :
+        cmd = "x/" + word + "&_IO_list_all"
+    head = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16)
+    chain = head
+    print("---------- fp : 0x%x ----------" % chain)
+    testorange(chain)
+    try :
+        while chain != 0 :
+            cmd = "x/" + word + "&((struct _IO_FILE_plus *)" + hex(chain) +").file._chain"
+            chain = int(gdb.execute(cmd,to_string=True).split(":")[1].strip(),16)
+            if chain != 0 :
+                print("---------- fp : 0x%x ----------" % chain)
+                testorange(chain)
+    except :
+        print("Chain is corrupted")
 
 def getfmtarg(addr):
     if capsize == 0 :
